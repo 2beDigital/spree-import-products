@@ -1,4 +1,7 @@
 ru:
+  product_import_imported: "Продукты успешно импортированы"
+  back_to_product_imports: "Вернутся к импорту продуктов"
+  product_import_http_error: "Ошибка загрузки файла. Удостоверьтесь что файл сохранён как текст"
   product_import_processing: 'Ваш импорт добавлен в очередь. На почту придет извещение по окончании импорта..'
   product_imports: 'Импорт'
   delete_product_import: "Удалить"
@@ -6,12 +9,27 @@ ru:
   confirm_delete_product_import: "Удаление импорта уничтожит связанные товары. Продолжить?"
   product_import:
     state:
-      created: "Создан"
-      started: "В процессе"
-      completed: "Готово"
-      failed: "Ошибка"
+      created: Загружено
+      failed: Ошибка
+      completed: Импортировано
+      started: Обрабатывается
   form:
     product_import:
       heading: 'Импорт из CSV'
+      separator_char: "Символ-разделитель для колонок"
+      encoding: "Кодировка"
       new:
         data_file: "Файл с данными"
+  actions:
+    import: "Импортировать"
+  table:
+    creation_date: "Дата создания"
+    csv_name: "Название csv файла"
+    status: "Статус"
+    date_status: "Дата изменения"
+    imported: "Кол-во импортированных товаров"
+    error_message: "Сообщение об ошибке"
+    actions: "Действия"
+  show_product_import: "Детали импорта"
+  sku: "Идентификатор товарной позиции (SKU)"
+  master_price: "Базовая цена"

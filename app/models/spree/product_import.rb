@@ -12,7 +12,10 @@ module Spree
 
     ENCODINGS= %w(UTF-8 iso-8859-1)
 
-    has_attached_file :data_file, :path => "/product_data/data-files/:basename_:timestamp.:extension"
+    has_attached_file :data_file,
+      :path => "public/spree/product_imports/data-files/:basename_:timestamp.:extension",
+      :url => "/spree/product_imports/data-files/:basename_:timestamp.:extension"
+
     validates_attachment_presence :data_file
     #Content type of csv vary in different browsers.
     validates_attachment :data_file, :presence => true, content_type: { content_type: ["text/csv", "text/plain", "text/comma-separated-values", "application/octet-stream", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"] }
@@ -59,7 +62,7 @@ module Spree
     end
     #Return the number of rows in CSV.
     def productsCount
-      rows = CSV.parse(open(self.data_file.url).read, :col_sep => separatorChar)
+      rows = CSV.parse(open(self.data_file.path).read, :col_sep => separatorChar)
 			#rows = CSV.parse(open(self.data_file.url).read, :col_sep => ",", :quote_char => "'")
       return rows.count
     end
@@ -101,7 +104,7 @@ module Spree
         log("import data start",:debug)
         @products_before_import = Spree::Product.all
         @skus_of_products_before_import = @products_before_import.map(&:sku)
-        csv_string=open(self.data_file.url,"r:#{encoding_csv}").read.encode('utf-8')
+        csv_string=open(self.data_file.path,"r:#{encoding_csv}").read.encode('utf-8')
         rows = CSV.parse(csv_string, :col_sep => separatorChar)
 
         if ProductImport.settings[:first_row_is_headings]
@@ -188,7 +191,7 @@ module Spree
           product.price=convertToPrice(value)
         elsif (product.respond_to?("#{field}="))
           product.send("#{field}=", value)
-        elsif not special_fields.include?(field.to_s) and property = Property.where("lower(name) = ?", field).first
+        elsif not special_fields.include?(field.to_s) and property = Property.where("name = ?", field).first and value.present?
           properties_hash[property] = value
         end
       end
@@ -229,7 +232,7 @@ module Spree
           if (product.respond_to?("#{field}=") and params_hash[:locale].nil?)
             product.send("#{field}=", value)
           end
-        elsif not special_fields.include?(field.to_s) and property = Property.where("lower(name) = ?", field).first
+        elsif not special_fields.include?(field.to_s) and property = Property.where("name = ?", field).first and value.present?
           properties_hash[property] = value
         end
       end
@@ -268,8 +271,7 @@ module Spree
 
       #Associate properties with product
       properties_hash.each do |property, value|
-        product_property = Spree::ProductProperty.where(:product_id => product.id, :property_id => property.id).first_or_initialize
-        product_property.value = value
+        product_property = Spree::ProductProperty.where(:product_id => product.id, :property_id => property.id, value: value).first_or_initialize
         product_property.save!
       end
 
@@ -281,6 +283,12 @@ module Spree
       #Finally, attach any images that have been specified
       ProductImport.settings[:image_fields_products].each do |field|
         find_and_attach_image_to(product, params_hash[field.to_sym], params_hash[ProductImport.settings[:image_text_products].to_sym])
+      end
+
+      if ProductImport.settings[:images_field] && images = params_hash[ProductImport.settings[:images_field].to_sym]
+        images.split(ProductImport.settings[:images_field_deliver] || '|').each do |image_address|
+          find_and_attach_image_to(product, image_address, params_hash[ProductImport.settings[:image_text_products].to_sym])
+        end
       end
 
       if ProductImport.settings[:multi_domain_importing] && product.respond_to?(:stores)
@@ -333,7 +341,7 @@ module Spree
         #We only apply OptionTypes if value is not null.
         if (value)
           applicable_option_type = OptionType.where(
-              "lower(presentation) = ? OR lower(name) = ?",
+              "presentation = ? OR name = ?",
               field.to_s, field.to_s).first
           if applicable_option_type.is_a?(OptionType)
             product.option_types << applicable_option_type unless product.option_types.include?(applicable_option_type)
@@ -439,6 +447,10 @@ module Spree
                                        })
 
       log("#{product_image.viewable_id} : #{product_image.viewable_type} : #{product_image.position}",:debug)
+      
+      unless Rails.application.config.use_paperclip || file.nil? || file.blank?
+        product_image.attachment.attach(io: file, filename: File.basename(file))
+      end
 
       product_or_variant.images << product_image if product_image.save
     end
@@ -497,7 +509,7 @@ module Spree
 
       taxon_hierarchy.split(/\s*\|\s*/).each do |hierarchy|
         hierarchy = hierarchy.split(/\s*>\s*/)
-        taxonomy = Spree::Taxonomy.where("lower(name) = ?", hierarchy.first.downcase).first
+        taxonomy = Spree::Taxonomy.where("name = ?", hierarchy.first.downcase).first
         taxonomy = Taxonomy.create(:name => hierarchy.first.capitalize) if taxonomy.nil? && ProductImport.settings[:create_missing_taxonomies]
         last_taxon = taxonomy.root
 
